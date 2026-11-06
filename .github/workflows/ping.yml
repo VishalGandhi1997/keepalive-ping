@@ -9,11 +9,34 @@ concurrency:
   group: ping
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   ping:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:
+      - uses: actions/checkout@v4
+
+      # GitHub silently disables scheduled workflows on a repo with no activity
+      # for 60 days, which is exactly what happened on 2026-10-11. Commit a
+      # timestamp every ~20 days so that clock never runs out again.
+      - name: keep repo active
+        run: |
+          age=$(( ( $(date +%s) - $(git log -1 --format=%ct) ) / 86400 ))
+          if [ "$age" -ge 20 ]; then
+            git config user.name "keepalive bot"
+            git config user.email "VishalGandhi1997@users.noreply.github.com"
+            date -u +"%Y-%m-%dT%H:%M:%SZ" > .keepalive
+            git add .keepalive
+            git commit -m "keepalive: reset GitHub 60-day inactivity timer"
+            git push
+            echo "pushed keepalive commit (last activity was ${age}d ago)"
+          else
+            echo "last commit ${age}d ago, under the 20d threshold, nothing to do"
+          fi
+
       - name: ping loop
         run: |
           end=$((SECONDS + 19800))
